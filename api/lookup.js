@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "https://averystrand.github.io");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -8,9 +9,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Parse body
     let body = {};
     body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     const linkedinUrl = body.linkedinUrl;
+
+    if (!linkedinUrl) {
+      return res.status(400).json({ error: "Missing linkedinUrl" });
+    }
 
     // Step 1. Create a new row in Clay
     const createRowResp = await fetch(`https://api.clay.run/v1/tables/${process.env.CLAY_TABLE_ID}/rows`, {
@@ -21,25 +27,25 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         fields: {
-          "Linkedin URL": linkedinUrl
+          "Linkedin URL": linkedinUrl   // 👈 this must match your Clay column name exactly
         }
       })
     });
 
     const newRow = await createRowResp.json();
-    const rowId = newRow?.id;
-
-    if (!rowId) {
-      return res.status(400).json({ error: "Failed to create row", debug: newRow });
+    if (!createRowResp.ok) {
+      return res.status(createRowResp.status).json({ error: "Failed to create row", debug: newRow });
     }
 
-    // Step 2. Poll for enrichment (wait until Email field is filled)
+    const rowId = newRow?.id;
+
+    // Step 2. Poll for enrichment (Email field)
     let email = null;
     let attempts = 0;
 
     while (!email && attempts < 10) {
       attempts++;
-      await new Promise(r => setTimeout(r, 3000)); // wait 3 seconds
+      await new Promise(r => setTimeout(r, 3000));
 
       const rowResp = await fetch(`https://api.clay.run/v1/tables/${process.env.CLAY_TABLE_ID}/rows/${rowId}`, {
         headers: {
@@ -53,7 +59,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ email, rowId });
   } catch (err) {
-    console.error(err);
+    console.error("Server error:", err);
     res.status(500).json({ error: "Server error" });
   }
 }
