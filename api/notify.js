@@ -1,51 +1,25 @@
-let results = {}; // in-memory store
-
-// helper function to normalize LinkedIn URLs
-function normalize(url) {
-  if (!url) return null;
-  return url.trim().replace(/\/$/, ""); // remove trailing slash if present
-}
-
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "https://averystrand.github.io");
-  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
-    if (req.method === "POST") {
-      // Parse Clay’s payload
-      let body = {};
-      try {
-        body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-      } catch (e) {
-        console.error("Parse error:", e, "Raw body:", req.body);
-        return res.status(400).json({ error: "Invalid JSON", raw: req.body });
-      }
+    let body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-      const linkedinUrl = normalize(body["Linkedin URL"]);
-      const email = body["Email"];
+    // normalize keys → underscores
+    const normalized = {
+      Linkedin_URL: body["Linkedin URL"] || body.Linkedin_URL || null,
+      Email: body["Email"] || null
+    };
 
-      if (!linkedinUrl) {
-        return res.status(400).json({ error: "Missing Linkedin URL", body });
-      }
+    console.log("Normalized payload (notify):", normalized);
 
-      results[linkedinUrl] = email || null;
-      console.log("Stored results object:", results);
+    globalThis.latestEmail = normalized;
 
-      return res.status(200).json({ ok: true });
-    }
-
-    if (req.method === "GET") {
-      const queryUrl = normalize(req.query.url);
-      const email = results[queryUrl] || null;
-      return res.status(200).json({ email });
-    }
-
-    res.status(405).json({ error: "Method not allowed" });
+    res.status(200).json({ ok: true, normalized });
   } catch (err) {
-    console.error("Server error:", err);
-    res.status(500).json({ error: "Server error", details: err.message });
+    res.status(500).json({ error: err.message });
   }
 }
